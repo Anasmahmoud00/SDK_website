@@ -1,0 +1,128 @@
+name: Rollback DigitalOcean Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "GHCR image tag to rollback to (for example: latest or a commit SHA)"
+        required: true
+        type: string
+      confirm_text:
+        description: "Type ROLLBACK to confirm"
+        required: true
+        type: string
+
+env:
+  GHCR_OWNER: ${{ github.repository_owner }}
+  IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/narrative-ai
+
+concurrency:
+  group: rollback-do
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback on Droplet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        run: |
+          set -e
+          if [ "${{ github.event.inputs.confirm_text }}" != "ROLLBACK" ]; then
+            echo "Aborting: confirm_text must be exactly ROLLBACK."
+            exit 1
+          fi
+
+      - name: Lowercase image repo
+        id: repo
+        run: |
+          echo "image=$(echo ${IMAGE_REPO} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Stage SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          DO_HOST: ${{ secrets.DO_HOST }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_do
+          chmod 600 ~/.ssh/id_do
+          ssh-keyscan -H "$DO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Apply rollback image tag and redeploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: deploy
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/app
+            if [ ! -f .env ]; then cp .env.example .env; fi
+
+            cat > .env.managed <<'EOF'
+            ENV=production
+            NARRATIVE_IMAGE=${{ steps.repo.outputs.image }}:${{ github.event.inputs.image_tag }}
+            GHCR_OWNER=${{ env.GHCR_OWNER }}
+            IMAGE_TAG=${{ github.event.inputs.image_tag }}
+            NARRATIVE_HOSTNAME=${{ secrets.NARRATIVE_HOSTNAME }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            COHERE_API_KEY=${{ secrets.COHERE_API_KEY }}
+            KAGGLE_OCR_URL=${{ secrets.KAGGLE_OCR_URL }}
+            LIVEKIT_URL=${{ secrets.LIVEKIT_URL }}
+            LIVEKIT_API_KEY=${{ secrets.LIVEKIT_API_KEY }}
+            LIVEKIT_API_SECRET=${{ secrets.LIVEKIT_API_SECRET }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
+            EOF
+
+            python3 - <<'PY'
+            from pathlib import Path
+            begin = "# --- BEGIN MANAGED DEPLOY BLOCK ---"
+            end = "# --- END MANAGED DEPLOY BLOCK ---"
+            env_path = Path(".env")
+            managed_path = Path(".env.managed")
+            env_text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+            managed_text = managed_path.read_text(encoding="utf-8").strip()
+            block = f"{begin}\n{managed_text}\n{end}\n"
+
+            if begin in env_text and end in env_text:
+                start = env_text.index(begin)
+                end_pos = env_text.index(end, start) + len(end)
+                replacement_target = env_text[start:end_pos]
+                env_text = env_text.replace(replacement_target, block.strip())
+                env_text = env_text.rstrip() + "\n"
+            else:
+                env_text = (env_text.rstrip() + "\n\n" + block).lstrip("\n")
+            env_path.write_text(env_text, encoding="utf-8")
+            managed_path.unlink(missing_ok=True)
+            PY
+
+            chmod 600 .env
+            set -a && . ./.env && set +a
+            python3 scripts/validate_env.py --env production
+
+            echo "${{ secrets.GHCR_PULL_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose -f docker-compose.do.yml pull narrative-api
+            docker compose -f docker-compose.do.yml run --rm narrative-api alembic upgrade head
+            docker compose -f docker-compose.do.yml up -d --remove-orphans
+            docker image prune -f
+
+      - name: Wait for /health (max 3 min)
+        env:
+          NARRATIVE_HOSTNAME: ${{ secrets.NARRATIVE_HOSTNAME }}
+        run: |
+          set -e
+          echo "Polling https://${NARRATIVE_HOSTNAME}/health ..."
+          for i in {1..36}; do
+            if curl -fsS "https://${NARRATIVE_HOSTNAME}/health" | grep -qi '"status"'; then
+              echo "Rollback health OK"
+              exit 0
+            fi
+            echo "  not ready (attempt $i/36)"; sleep 5
+          done
+          echo "Rollback health check did not pass; collecting logs..."
+          ssh -i ~/.ssh/id_do "deploy@${{ secrets.DO_HOST }}" \
+            "cd ~/app && docker compose -f docker-compose.do.yml logs --tail=200 narrative-api caddy" || true
+          exit 1

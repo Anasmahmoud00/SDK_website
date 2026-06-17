@@ -1,0 +1,44 @@
+name: Scheduled Production Backup
+
+on:
+  schedule:
+    # Run at 00:00 UTC every day
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backup:
+    name: Execute DigitalOcean backup
+    runs-on: ubuntu-latest
+    concurrency:
+      group: do-backup-production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Stage SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          DO_HOST: ${{ secrets.DO_HOST }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_do
+          chmod 600 ~/.ssh/id_do
+          ssh-keyscan -H "$DO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run backup on Droplet
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_do "deploy@${DO_HOST}" '
+            set -e
+            cd ~/app
+            chmod +x scripts/backup.sh
+            mkdir -p ./backups
+            set -a && . ./.env && set +a
+            ./scripts/backup.sh ./backups 14
+            ls -lh ./backups | tail -n 5
+          '

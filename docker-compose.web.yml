@@ -1,0 +1,109 @@
+# =============================================================================
+# Docker Compose for Narrative AI SDK Developer Portal & Web App
+# =============================================================================
+#
+# This setup boots:
+#   1. narrative-web - The FastAPI backend serving the HTML5 Documentation Hub (:8000)
+#   2. postgres      - PostgreSQL + pgvector for RAG / User memory
+#   3. redis         - Redis cache backing rate limiting
+#
+# Usage:
+#   docker compose -f docker-compose.web.yml up -d
+#
+# Then open: http://localhost:8000/docs-portal or http://localhost:8000/
+# =============================================================================
+
+version: '3.8'
+
+services:
+  narrative-web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: narrative-ai-sdk-web-portal
+    command:
+      - "python"
+      - "-m"
+      - "narrative_ai.api.app"
+      - "--engines"
+      - "stt,tts,llm,rag,vlm,ingestion"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    environment:
+      ENV: development
+      DATABASE_URL: postgresql://narrative:${POSTGRES_PASSWORD:-narrative_dev_password}@postgres:5432/narrative_ai
+      REDIS_URL: redis://redis:6379/0
+      LLM_PRIMARY_PROVIDER: openai
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config/providers.yml:/app/config/providers.yml:ro
+      - ./test_outputs:/app/test_outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - web_portal_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: narrative-ai-web-postgres
+    environment:
+      POSTGRES_USER: narrative
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-narrative_dev_password}
+      POSTGRES_DB: narrative_ai
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - postgres_web_data:/var/lib/postgresql/data
+    networks:
+      - web_portal_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U narrative -d narrative_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    container_name: narrative-ai-web-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_web_data:/data
+    networks:
+      - web_portal_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+networks:
+  web_portal_network:
+    driver: bridge
+
+volumes:
+  postgres_web_data:
+  redis_web_data:

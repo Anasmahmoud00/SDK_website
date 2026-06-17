@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Narrative AI SDK - Developer Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --accent: #ec4899;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --sidebar-bg: rgba(15, 23, 42, 0.9);
+            --text: #f1f5f9;
+            --text-dim: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            padding: 2rem 1rem;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 3rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-list {
+            list-style: none;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--text-dim);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            transform: translateX(5px);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(45deg, rgba(99, 102, 241, 0.2), transparent);
+            border-left: 3px solid var(--primary);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            padding: 3rem;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        header {
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .breadcrumb {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Tables */
+        .glass-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            margin-bottom: 2rem;
+        }
+
+        .glass-table th, .glass-table td {
+            padding: 1.2rem;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .glass-table th {
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        .glass-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .glass-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+            cursor: pointer;
+        }
+
+        .func-name {
+            color: var(--primary);
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--primary);
+        }
+
+        /* Detail View */
+        .detail-card {
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        pre {
+            background: #020617;
+            padding: 1.5rem;
+            border-radius: 12px;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border: 1px solid var(--glass-border);
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+
+        .back-btn {
+            background: none;
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 2rem;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .intro-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .intro-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            transition: transform 0.3s;
+        }
+
+        .intro-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            Narrative SDK
+        </div>
+        <ul class="nav-list" id="sidebar-nav">
+            <li class="nav-item active" data-engine="welcome">🏠 Overview</li>
+            <!-- Engines will be injected here -->
+        </ul>
+    </div>
+
+    <div class="main-content" id="content-area">
+        <!-- Content will be dynamic -->
+    </div>
+
+    <script>
+        const docData = {
+            llm: {
+                title: "Large Language Models",
+                desc: "Unified interface for text generation across OpenAI, Gemini, Anthropic, and more.",
+                functions: [
+                    { name: "generate", desc: "Generates text from a prompt.", input: "prompt (str), model (opt)", output: "Response object", usage: "import narrative_ai as nai\n\nasync def main():\n    res = await nai.llm.generate(\"Hello World\")\n    print(res.text)" },
+                    { name: "set_api_key", desc: "Sets the API key for a provider.", input: "key (str), provider (str)", output: "None", usage: "nai.llm.set_api_key(\"sk-...\", provider=\"openai\")" },
+                    { name: "set_llm_provider", desc: "Sets the default LLM provider.", input: "provider (str)", output: "None", usage: "nai.llm.set_llm_provider(\"anthropic\")" }
+                ]
+            },
+            ocr: {
+                title: "OCR Engine",
+                desc: "Extract text from images, PDFs, and scanned documents with high accuracy.",
+                functions: [
+                    { name: "process_image", desc: "Extracts text from an image file.", input: "image_path (str/Path)", output: "OCRResult", usage: "result = await nai.ocr.process_image(\"scan.jpg\")\nprint(result.text)" },
+                    { name: "set_service_url", desc: "Sets the remote OCR service endpoint.", input: "url (str)", output: "None", usage: "nai.ocr.set_service_url(\"https://ocr.ai.com\")" }
+                ]
+            },
+            stt: {
+                title: "Speech to Text",
+                desc: "High-fidelity audio transcription using Whisper and ElevenLabs.",
+                functions: [
+                    { name: "transcribe", desc: "Converts audio file to text.", input: "file_path (str)", output: "STTResult", usage: "result = await nai.stt.transcribe(\"meeting.mp3\")" },
+                    { name: "set_api_key", desc: "Sets STT provider key.", input: "key (str), provider (str)", output: "None", usage: "nai.stt.set_api_key(\"key\", \"elevenlabs\")" }
+                ]
+            },
+            tts: {
+                title: "Text to Speech",
+                desc: "Emotional and realistic voice synthesis.",
+                functions: [
+                    { name: "synthesize", desc: "Converts text to audio.", input: "text (str), voice (opt)", output: "Audio path (str)", usage: "path = await nai.tts.synthesize(\"Hello there!\")" }
+                ]
+            },
+            rag: {
+                title: "RAG & Memory",
+                desc: "Knowledge base integration with Vector Stores and Retrieval.",
+                functions: [
+                    { name: "remember", desc: "Indexes a document into memory.", input: "document (StructuredDoc)", output: "IndexingResult", usage: "await nai.rag.remember(doc)" },
+                    { name: "recall", desc: "Retrieves relevant context for a query.", input: "query (str), top_k (int)", output: "RichContext", usage: "ctx = await nai.rag.recall(\"Who is CEO?\")" },
+                    { name: "set_api_key", desc: "Sets embedding provider key.", input: "key (str), provider (str)", output: "None", usage: "nai.rag.set_api_key(\"key\", \"cohere\")" }
+                ]
+            },
+            web_intel: {
+                title: "Web Intelligence",
+                desc: "Search and research the live internet.",
+                functions: [
+                    { name: "search", desc: "Performs a web search.", input: "query (str)", output: "WebResult", usage: "results = await nai.web_intel.search(\"AI News\")" }
+                ]
+            },
+            input_processor: {
+                title: "Input Processor",
+                desc: "The central entry point for all multimodal file processing.",
+                functions: [
+                    { name: "process", desc: "Analyzes any file/URL and returns structure.", input: "source (str/bytes)", output: "StructuredDocument", usage: "doc = await nai.input_processor.process(\"file.pdf\")" }
+                ]
+            }
+        };
+
+        const sidebar = document.getElementById('sidebar-nav');
+        const contentArea = document.getElementById('content-area');
+
+        function initSidebar() {
+            Object.keys(docData).forEach(key => {
+                const li = document.createElement('li');
+                li.className = 'nav-item';
+                li.innerHTML = `<span>${docData[key].title}</span>`;
+                li.onclick = () => showEngine(key);
+                sidebar.appendChild(li);
+            });
+        }
+
+        function showWelcome() {
+            contentArea.innerHTML = `
+                <header>
+                    <div class="breadcrumb">Narrative AI > SDK > Overview</div>
+                    <h1>Developer Documentation</h1>
+                    <p style="color: var(--text-dim); font-size: 1.1rem; line-height: 1.6;">
+                        Welcome to the Narrative AI SDK. Build production-grade AI agents with unified interfaces for 
+                        LLM, Memory, Voice, and Vision.
+                    </p>
+                </header>
+                <div class="intro-grid">
+                    <div class="intro-card"><h3>🚀 Quick Install</h3><p>pip install narrative-ai-framework</p></div>
+                    <div class="intro-card"><h3>🛠️ Multi-Provider</h3><p>Switch between OpenAI, Gemini, Anthropic in one line.</p></div>
+                    <div class="intro-card"><h3>🛡️ Secure</h3><p>Built-in Rate Limiting and Audit Trails.</p></div>
+                </div>
+            `;
+        }
+
+        function showEngine(key) {
+            const data = docData[key];
+            contentArea.innerHTML = `
+                <header>
+                    <div class="breadcrumb">Engines > ${data.title}</div>
+                    <h1>${data.title}</h1>
+                    <p style="color: var(--text-dim); line-height: 1.6;">${data.desc}</p>
+                </header>
+                <table class="glass-table">
+                    <thead>
+                        <tr><th>Function Name</th><th>Description</th><th>Inputs</th><th>Output</th></tr>
+                    </thead>
+                    <tbody>
+                        ${data.functions.map((f, i) => `
+                            <tr onclick="showFunctionDetail('${key}', ${i})">
+                                <td class="func-name">${f.name}()</td>
+                                <td>${f.desc}</td>
+                                <td><span class="badge">${f.input}</span></td>
+                                <td>${f.output}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            updateSidebar(key);
+        }
+
+        function showFunctionDetail(engineKey, funcIndex) {
+            const func = docData[engineKey].functions[funcIndex];
+            contentArea.innerHTML = `
+                <button class="back-btn" onclick="showEngine('${engineKey}')">← Back to ${docData[engineKey].title}</button>
+                <div class="detail-card">
+                    <div class="breadcrumb">${docData[engineKey].title} > ${func.name}()</div>
+                    <h1 class="func-name">${func.name}()</h1>
+                    <p style="margin: 1rem 0; color: var(--text-dim);">${func.desc}</p>
+                    
+                    <h3 style="margin-top: 2rem;">Parameters</h3>
+                    <p style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin: 1rem 0;">${func.input}</p>
+                    
+                    <h3 style="margin-top: 2rem;">Usage Example</h3>
+                    <pre><code>${func.usage}</code><button class="copy-btn" onclick="copyCode(this)">Copy</button></pre>
+                    
+                    <h3 style="margin-top: 2rem;">Returns</h3>
+                    <p>${func.output}</p>
+                </div>
+            `;
+        }
+
+        function updateSidebar(activeKey) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.innerText.includes(docData[activeKey]?.title)) {
+                    item.classList.add('active');
+                }
+            });
+        }
+
+        function copyCode(btn) {
+            const code = btn.previousSibling.innerText;
+            navigator.clipboard.writeText(code);
+            btn.innerText = "Copied!";
+            setTimeout(() => btn.innerText = "Copy", 2000);
+        }
+
+        initSidebar();
+        showWelcome();
+    </script>
+</body>
+</html>

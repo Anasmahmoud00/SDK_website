@@ -1,0 +1,26 @@
+# Copy this file to terraform.tfvars and fill in your details
+# NEVER COMMIT THE ACTUAL terraform.tfvars FILE
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaaxxxxxxx"
+user_ocid        = "ocid1.user.oc1..aaaaaaaaxxxxxxx"
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "./keys/oci_api_key.pem"
+region           = "eu-frankfurt-1"
+compartment_id   = "ocid1.tenancy.oc1..aaaaaaaaxxxxxxx" # Or a specific compartment OCID
+
+# SSH Key for accessing the server
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+ssh_source_cidr     = "0.0.0.0/0" # Replace with your IP for security: "x.x.x.x/32"
+
+# If you get "Out of host capacity": try another AD, smaller A1, or E2.1.Micro (x86)
+# availability_domain_index = 1
+# instance_ocpus         = 1
+# instance_memory_in_gbs = 6
+# instance_shape         = "VM.Standard.E2.1.Micro"   # Then add GitHub secret IMAGE_PLATFORM = linux/amd64
+
+# Try BETTER resources in AD-3 (if E2.1.Micro worked there): A1.Flex in same AD
+# availability_domain_index = 2
+# instance_shape           = "VM.Standard.A1.Flex"
+# instance_ocpus           = 1
+# instance_memory_in_gbs   = 6
+# (Terraform will replace the current instance. If "Out of host capacity", keep E2.1.Micro.)

@@ -1,0 +1,621 @@
+# =============================================================================
+# NARRATIVE AI - PROVIDERS CONFIGURATION
+# =============================================================================
+#
+# This file configures all AI providers used in the framework.
+# Toggle providers on/off, set priorities, and configure fallbacks.
+#
+# Usage:
+#   - Set 'enabled: true' to activate a provider
+#   - Set 'primary: true' to make it the default choice
+#   - API keys should be set in .env file (not here for security)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GLOBAL SETTINGS
+# -----------------------------------------------------------------------------
+global:
+  # Default timeout for all API calls (seconds)
+  default_timeout: 30
+  
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    backoff_multiplier: 2.0
+    initial_delay: 1.0
+  
+  # Logging
+  log_api_calls: true
+  log_performance_metrics: true
+
+# =============================================================================
+# LLM PROVIDERS (Language Models)
+# =============================================================================
+llm:
+  # Default provider order for fallback
+  fallback_order:
+    - ollama
+  # Keep Ollama as the only fallback target to enforce Ollama-first operation.
+  # If you want multi-provider failover later, add providers back in this list.
+
+  # ------------- OLLAMA CLOUD -------------
+  ollama:
+    enabled: true
+    primary: true  # Use as default for chat/voice
+
+    # API Configuration
+    api_key_env: "OLLAMA_CLOUD_API_KEY"
+    base_url: "https://ollama.com"
+
+    # Model Selection
+    models:
+      default: "nemotron-3-nano:30b-cloud"
+      advanced: "nemotron-3-nano:30b-cloud"
+
+    # Request Settings
+    timeout: 60
+    max_tokens: 4096
+    temperature: 0.7
+
+  # Minimum confidence to accept response
+  min_confidence: 0.7
+  
+  # ------------- GEMINI (Google) -------------
+  gemini:
+    enabled: true
+    primary: false
+    
+    # API Configuration
+    api_key_env: "GEMINI_API_KEY"  # Environment variable name
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    
+    # Model Selection (gemini-2.5-flash works with v1beta; 1.5-flash returned 404)
+    models:
+      default: "gemini-2.5-flash"
+      advanced: "gemini-2.5-pro"
+      embedding: "text-embedding-004"
+    
+    # Request Settings
+    timeout: 30
+    max_tokens: 8192
+    temperature: 0.7
+    
+    # Rate Limits (per minute)
+    rate_limit:
+      requests_per_minute: 60
+      tokens_per_minute: 1000000
+    
+    # Features
+    features:
+      streaming: true
+      function_calling: true
+      vision: true
+      audio: false
+  
+  # ------------- OPENAI (GPT) -------------
+  openai:
+    enabled: true
+    primary: false
+    
+    # API Configuration
+    api_key_env: "OPENAI_API_KEY"
+    base_url: "https://api.openai.com/v1"
+    organization_env: "OPENAI_ORG_ID"  # Optional
+    
+    # Model Selection
+    models:
+      default: "gpt-4o-mini"
+      advanced: "gpt-4o"
+      embedding: "text-embedding-3-small"
+      legacy: "gpt-3.5-turbo"
+    
+    # Request Settings
+    timeout: 30
+    max_tokens: 4096
+    temperature: 0.7
+    
+    # Rate Limits
+    rate_limit:
+      requests_per_minute: 500
+      tokens_per_minute: 200000
+    
+    # Features
+    features:
+      streaming: true
+      function_calling: true
+      vision: true
+      audio: true  # GPT-4o supports audio
+  
+  # ------------- ANTHROPIC (Claude) -------------
+  anthropic:
+    enabled: false
+    primary: false
+    
+    # API Configuration
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url: "https://api.anthropic.com/v1"
+    
+    # Model Selection
+    models:
+      default: "claude-3-haiku-20240307"
+      advanced: "claude-3-5-sonnet-20241022"
+      legacy: "claude-3-opus-20240229"
+    
+    # Request Settings
+    timeout: 60
+    max_tokens: 4096
+    temperature: 0.7
+    
+    # Features
+    features:
+      streaming: true
+      function_calling: true
+      vision: true
+      audio: false
+  
+  # ------------- XAI (Grok) -------------
+  xai:
+    enabled: false
+    primary: false
+    
+    # API Configuration
+    api_key_env: "XAI_API_KEY"
+    base_url: "https://api.x.ai/v1"  # OpenAI-compatible endpoint
+    
+    # Model Selection
+    models:
+      default: "grok-beta"
+      advanced: "grok-2"
+      reasoning: "grok-beta"  # Reasoning models available
+    
+    # Request Settings
+    timeout: 30
+    max_tokens: 4096
+    temperature: 0.7
+    
+    # Rate Limits (check xAI documentation for current limits)
+    rate_limit:
+      requests_per_minute: 60
+      tokens_per_minute: 100000
+    
+    # Features
+    features:
+      streaming: true
+      function_calling: true
+      vision: true
+      audio: false
+  
+  # ------------- DEEPSEEK -------------
+  deepseek:
+    enabled: false
+    primary: false
+    
+    # API Configuration
+    api_key_env: "DEEPSEEK_API_KEY"
+    base_url: "https://api.deepseek.com"  # OpenAI-compatible endpoint
+    
+    # Model Selection
+    models:
+      default: "deepseek-chat"  # Non-thinking mode (DeepSeek-V3.2)
+      reasoning: "deepseek-reasoner"  # Thinking mode (DeepSeek-V3.2)
+    
+    # Request Settings
+    timeout: 30
+    max_tokens: 4096
+    temperature: 0.7
+    
+    # Rate Limits (check DeepSeek documentation for current limits)
+    rate_limit:
+      requests_per_minute: 60
+      tokens_per_minute: 100000
+    
+    # Features
+    features:
+      streaming: true
+      function_calling: true
+      vision: false
+      audio: false
+      reasoning: true  # Special feature: reasoning mode
+
+# =============================================================================
+# WEB INTELLIGENCE (Internet Search)
+# =============================================================================
+web:
+  enabled: true
+  mode: "auto"          # off | auto | force
+  primary_provider: "duckduckgo"
+  fallback_order:
+    - duckduckgo
+  timeout_ms: 3000
+  max_results: 5
+  freshness_ttl: 300
+  deny_domains:
+    - localhost
+    - 127.0.0.1
+    - ::1
+
+  duckduckgo:
+    enabled: true
+    primary: true
+    region: "wt-wt"
+
+  google:
+    enabled: false
+    primary: false
+    api_key_env: "GOOGLE_SEARCH_API_KEY"
+    cx_env: "GOOGLE_SEARCH_CX"
+    max_results: 5
+
+# =============================================================================
+# STT PROVIDERS (Speech-to-Text)
+# =============================================================================
+stt:
+  # Default provider order for fallback
+  fallback_order:
+    - elevenlabs
+    - whisper
+  
+  # Minimum confidence to accept transcription
+  min_confidence: 0.6
+  
+  # Voice Activity Detection
+  vad:
+    enabled: true
+    mode: 2  # 0-3 (0=quality, 3=aggressive)
+    sample_rate: 16000
+    # When VAD finds no segments (e.g. TTS/synthetic), transcribe full audio once instead of returning empty
+    retry_with_full_audio_on_no_speech: true
+  
+  # Emotion Detection
+  emotion_detection:
+    enabled: true
+    provider: "prosody"  # prosody, ml_model, hybrid
+  
+  # ------------- ELEVENLABS STT -------------
+  elevenlabs:
+    enabled: true
+    primary: true  # Priority provider
+    
+    # API Configuration
+    api_key_env: "ELEVENLABS_API_KEY"
+    base_url: "https://api.elevenlabs.io/v1"
+    
+    # Model Selection (realtime API only supports scribe_v2_realtime for streaming)
+    models:
+      batch: "scribe_v2"
+      streaming: "scribe_v2_realtime"
+    
+    # Request Settings
+    timeout: 30
+    retry_attempts: 3
+    
+    # Realtime streaming tuning (WebSocket)
+    vad_silence_threshold_secs: 0.5  # Silence before VAD commit (0.3-3.0)
+    final_commit_grace_sec: 0.12     # Wait after audio end for committed_transcript
+    
+    # Audio Settings
+    audio:
+      sample_rate: 16000
+      format: "pcm"
+    
+    # Features
+    features:
+      streaming: true
+      word_timestamps: true
+      speaker_diarization: true
+      language_detection: true
+  
+  # ------------- WHISPER (Local/Fine-tuned) -------------
+  # Optimized for: Arabic/English code-switching; fine-tuned Whisper 3 Turbo via faster-whisper (CT2)
+  whisper:
+    enabled: true
+    primary: false
+    
+    # Model Configuration: CT2 = faster-whisper (quantized); HF path = HuggingFace Whisper
+    model_path: "models/whisper-3-turbo-finetuned-ct2"  # CTranslate2 (faster); or "models/whisper-3-turbo-finetuned" for HF
+    model_path_env: "WHISPER_MODEL_PATH"  # Override via env (e.g. absolute path or HF id)
+    
+    # Server Mode (for deployed fine-tuned model)
+    server:
+      enabled: false
+      url_env: "WHISPER_SERVER_URL"
+      url_default: "http://localhost:8000"
+    
+    # Local Mode Settings (compute_type for CTranslate2/faster-whisper only)
+    local:
+      device: "auto"  # auto, cuda, cpu
+      precision: "float16"  # float16, float32 (HuggingFace path)
+      compute_type: "int8_float16"  # CTranslate2: int8, int8_float16, float16
+      chunk_length_s: 30
+      overlap_s: 0.5  # Overlap between chunks (seconds); 1.0 for lower latency
+      # Lower perceived latency when using transcribe_streaming(): first partial after ~5s of audio
+      streaming_chunk_length_s: 5.0  # null = use chunk_length_s (30); 5–10 = faster first result
+      beam_size: 5  # 1 = lowest latency (greedy); 5 = best quality
+      # Much lower latency: set use_low_latency_preset: true (beam=1, temp=0, patience=0.5). Trade-off: quality.
+      use_low_latency_preset: false  # true = noticeably faster batch/streaming; slightly lower accuracy
+      low_latency: false  # or set individually; ignored when use_low_latency_preset is true
+      disable_temperature_fallback: false
+      patience: 1.0  # must be > 0 (0.5 = fast; 1.0 = default quality)
+      use_vad: true
+      # Anti-hallucination (short/clipped files like test4.opus): skip uncertain segments
+      # no_speech_threshold: 0.7   # default 0.6; higher = skip more as "no speech"
+      # log_prob_threshold: -1.2   # default -1.0; lower = skip low-confidence segments
+      # initial_prompt: null       # optional hint phrase to reduce hallucination
+      # Optional: Silero VAD tuning (faster-whisper). E.g. for code-switching use shorter silence.
+      vad_parameters:
+        min_silence_duration_ms: 500
+        speech_pad_ms: 200
+      word_timestamps: false  # true adds cost
+      condition_on_previous_text: true  # false can reduce repetition loops
+      cpu_threads: 16  # match CPU cores for best throughput on CPU (ignored on GPU)
+      max_concurrent_transcriptions: 4
+      faster_whisper_max_workers: 2
+    
+    # Features
+    features:
+      streaming: true  # Pseudo-streaming with chunks
+      word_timestamps: true
+      language_detection: true
+  
+  # ------------- GOOGLE CLOUD STT -------------
+  google:
+    enabled: false
+    primary: false
+    
+    # API Configuration
+    credentials_env: "GOOGLE_APPLICATION_CREDENTIALS"
+    
+    # Model Selection
+    models:
+      default: "latest_long"
+      phone: "phone_call"
+      video: "video"
+    
+    # Features
+    features:
+      streaming: true
+      word_timestamps: true
+      speaker_diarization: true
+      punctuation: true
+
+# =============================================================================
+# TTS PROVIDERS (Text-to-Speech)
+# =============================================================================
+tts:
+  # Default provider order for fallback
+  fallback_order:
+    - elevenlabs
+    - openai
+    - google
+    - local
+  
+  # ------------- ELEVENLABS TTS -------------
+  elevenlabs:
+    enabled: true
+    primary: true
+    
+    # API Configuration
+    api_key_env: "ELEVENLABS_API_KEY"
+    base_url: "https://api.elevenlabs.io/v1"
+    
+    # Model Selection
+    models:
+      default: "eleven_flash_v2_5"
+      quality: "eleven_turbo_v2_5"
+      multilingual: "eleven_multilingual_v2"
+    
+    # Voice Configuration
+    voices:
+      default: "21m00Tcm4TlvDq8ikWAM"  # Rachel
+      arabic: null  # Set your Arabic voice ID
+      custom_env: "ELEVENLABS_VOICE_ID"
+    
+    # Output Settings
+    output:
+      format: "mp3_44100_128"
+      sample_rate: 44100
+    
+    # Features
+    features:
+      streaming: true
+      voice_cloning: true
+      emotion_control: true
+      ssml: false
+  
+  # ------------- OPENAI TTS -------------
+  openai:
+    enabled: true
+    primary: false
+    
+    # API Configuration
+    api_key_env: "OPENAI_API_KEY"
+    base_url: "https://api.openai.com/v1"
+    
+    # Model Selection (per https://platform.openai.com/docs/api-reference/audio/createSpeech)
+    models:
+      default: "tts-1"
+      hd: "tts-1-hd"
+      streaming: "gpt-4o-mini-tts"  # Supports true streaming; tts-1/tts-1-hd do not
+    
+    # Voice Options
+    voices:
+      default: "alloy"
+      options:
+        - alloy
+        - echo
+        - fable
+        - onyx
+        - nova
+        - shimmer
+    
+    # Output Settings
+    output:
+      format: "mp3"
+      speed: 1.0  # 0.25 to 4.0
+    
+    # Features
+    features:
+      streaming: true
+      emotion_control: false
+  
+  # ------------- GOOGLE CLOUD TTS -------------
+  google:
+    enabled: false
+    primary: false
+    
+    # API Configuration
+    credentials_env: "GOOGLE_APPLICATION_CREDENTIALS"
+    
+    # Voice Configuration
+    voices:
+      default:
+        language_code: "en-US"
+        name: "en-US-Neural2-J"
+      arabic:
+        language_code: "ar-XA"
+        name: "ar-XA-Wavenet-B"
+    
+    # Features
+    features:
+      streaming: true
+      ssml: true
+      neural_voices: true
+  
+  # ------------- LOCAL TTS (Custom Fine-tuned) -------------
+  local:
+    enabled: false
+    primary: false
+    
+    # Server Configuration
+    server:
+      url_env: "CUSTOM_TTS_SERVER_URL"
+      url_default: "http://localhost:8001"
+    
+    # Model Settings
+    model:
+      name: "custom_arabic_tts"
+      sample_rate: 22050
+
+# =============================================================================
+# REAL-TIME COMMUNICATION (LiveKit)
+# =============================================================================
+realtime:
+  # ------------- LIVEKIT -------------
+  livekit:
+    enabled: true
+    primary: true
+    
+    # Server Configuration
+    url_env: "LIVEKIT_URL"
+    api_key_env: "LIVEKIT_API_KEY"
+    api_secret_env: "LIVEKIT_API_SECRET"
+    
+    # Room Settings
+    room:
+      max_participants: 10
+      empty_timeout: 300  # seconds
+      auto_recording: false
+    
+    # Audio Settings
+    audio:
+      sample_rate: 48000
+      channels: 1
+      echo_cancellation: true
+      noise_suppression: true
+      auto_gain_control: true
+    
+    # Agent Settings
+    agent:
+      # How the AI agent joins rooms
+      auto_subscribe: true
+      
+      # Voice pipeline settings (realtime-optimized per Grok/Claude analysis)
+      pipeline:
+        stt_provider: "elevenlabs"
+        llm_provider: "ollama"
+        tts_provider: "elevenlabs"
+        
+        # VAD (Voice Activity Detection) – 0 = most conservative, fewer false positives
+        vad_aggressiveness: 0   # 0–3 (0=quality, 3=aggressive)
+        semantic_vad: true     # Better turn detection
+        
+        # Latency optimization
+        vad_enabled: true
+        interrupt_enabled: true  # Allow user to interrupt AI
+        interrupt_min_words: 3   # Require more words to interrupt (reduces accidental cuts)
+        
+        # Timing – faster turns for real-time feel
+        min_endpointing_delay: 0.5  # seconds
+        max_endpointing_delay: 3.5  # seconds (reduced from 6.0 for faster response)
+        max_response_delay: 2.0     # seconds
+        max_turns: 100              # max conversation turns per session
+        # False interruption (LiveKit-style): resume agent if user "interruption" was background noise.
+        # We keep this disabled by default in voice_mode to avoid duplicate replies and
+        # \"resume after close\" edge cases; it can be re-enabled deliberately if needed.
+        resume_false_interruption: false
+        false_interruption_timeout: 1.0  # seconds of silence before treating as false interruption (when enabled)
+
+# =============================================================================
+# EMBEDDING PROVIDERS
+# =============================================================================
+embeddings:
+  # Default provider
+  default_provider: "openai"
+  
+  # Dimension settings
+  default_dimension: 1536
+  
+  # ------------- OPENAI EMBEDDINGS -------------
+  openai:
+    enabled: true
+    primary: true
+    
+    api_key_env: "OPENAI_API_KEY"
+    model: "text-embedding-3-small"
+    dimensions: 1536
+    
+    # Batch settings
+    batch_size: 100
+    
+  # ------------- GEMINI EMBEDDINGS -------------
+  gemini:
+    enabled: true
+    primary: false
+    
+    api_key_env: "GEMINI_API_KEY"
+    model: "text-embedding-004"
+    dimensions: 768
+    
+  # ------------- LOCAL EMBEDDINGS (Sentence Transformers) -------------
+  local:
+    enabled: false
+    primary: false
+    
+    model: "sentence-transformers/all-MiniLM-L6-v2"
+    device: "auto"
+    dimensions: 384
+
+# =============================================================================
+# PROVIDER HEALTH & MONITORING
+# =============================================================================
+monitoring:
+  # Health check interval (seconds)
+  health_check_interval: 60
+  
+  # Circuit breaker settings
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 60
+  
+  # Metrics
+  metrics:
+    enabled: true
+    export_prometheus: false
+    
+  # Alerts
+  alerts:
+    on_provider_down: true
+    on_high_latency: true
+    latency_threshold_ms: 5000

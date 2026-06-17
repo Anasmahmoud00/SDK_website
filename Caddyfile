@@ -1,0 +1,57 @@
+# =============================================================================
+# Caddyfile -- DigitalOcean Droplet
+# =============================================================================
+# Auto-HTTPS via Let's Encrypt for {$NARRATIVE_HOSTNAME} (a free *.sslip.io
+# subdomain that resolves to the Droplet's public IP). Caddy renews certs
+# automatically, no cron needed.
+#
+# Set NARRATIVE_HOSTNAME on the caddy service to e.g.
+# narrative-203-0-113-42.sslip.io (dashed form -- avoids wildcard cert).
+# =============================================================================
+
+{$NARRATIVE_HOSTNAME} {
+    # gzip + zstd compression for JSON payloads (entries can be chatty).
+    encode zstd gzip
+
+    # Public health endpoint -- intentionally open so DO Monitoring and
+    # external uptime checks can hit it without a token.
+    handle /health {
+        reverse_proxy narrative-api:8000
+    }
+
+    # Block /metrics and /health/dependencies from the public internet.
+    # They are still reachable from inside the Droplet via
+    # `docker exec` or `curl http://localhost:8000/metrics`.
+    @internal path /metrics /health/dependencies /health/dependencies/*
+    handle @internal {
+        respond "Forbidden" 403
+    }
+
+    # Everything else: proxy to the unified API.
+    reverse_proxy narrative-api:8000 {
+        # Forward correlation-id-relevant headers so the backend's
+        # CorrelationIdMiddleware can pick up an existing ID if present.
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Generous timeouts -- LLM streaming can take a while.
+        transport http {
+            read_timeout 120s
+            write_timeout 120s
+            dial_timeout 10s
+        }
+    }
+
+    # Structured access logs to stdout -> docker logs caddy.
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Redirect any direct-IP HTTP hits to the canonical hostname so Let's Encrypt
+# challenges still land on the right vhost.
+:80 {
+    redir https://{$NARRATIVE_HOSTNAME}{uri} permanent
+}

@@ -1,0 +1,81 @@
+# =============================================================================
+# Docker Build Context Exclusions
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+dist
+build
+*.egg
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.vscode
+.cursor
+.idea
+*.swp
+*.swo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Models (mounted as volume, not baked in)
+models/
+*.safetensors
+*.bin
+*.pt
+*.onnx
+
+# Tests & docs (not needed in production image)
+tests/
+docs/
+*.md
+!requirements.txt
+
+# Infrastructure configs (not needed inside container)
+terraform/
+k8s/
+.github/
+
+# Mobile app
+mobile_app/
+node_modules/
+
+# Scripts (client-side, not needed in worker)
+scripts/
+
+# Docker files themselves
+docker/
+docker-compose*.yml
+Dockerfile*
+
+# Coverage / CI artifacts
+.coverage
+.coveragerc
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Misc
+*.zip
+*.tar.gz
+*.log
+LICENSE
+Makefile
+VERSION
+pyproject.toml

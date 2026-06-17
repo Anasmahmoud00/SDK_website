@@ -1,0 +1,158 @@
+name: Deploy to DigitalOcean
+
+# =============================================================================
+# DigitalOcean deploy pipeline.
+# Runs CD directly on the Droplet: sync repo, build the unified narrative-ai
+# image locally, migrate, restart, and verify /health.
+#
+# Required GitHub repository secrets:
+#   DO_HOST             -- Droplet public IPv4
+#   DO_SSH_PRIVATE_KEY  -- Private SSH key (matches the public key on the Droplet)
+#   NARRATIVE_HOSTNAME  -- e.g. narrative-203-0-113-42.sslip.io
+#   POSTGRES_PASSWORD, JWT_SECRET_KEY, GEMINI_API_KEY, COHERE_API_KEY,
+#   KAGGLE_OCR_URL, LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET,
+#   CORS_ALLOWED_ORIGINS  (matches the .env keys consumed by validate_env.py)
+# =============================================================================
+
+on:
+  push:
+    branches: [mobile_app_integration]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy (branch/tag/SHA). Defaults to current ref."
+        required: false
+        type: string
+
+env:
+  DEPLOY_BRANCH: mobile_app_integration
+
+concurrency:
+  group: deploy-do-${{ github.ref_name || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Droplet
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for compose / scripts / Caddyfile)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+
+      - name: Stage SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          DO_HOST: ${{ secrets.DO_HOST }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_do
+          chmod 600 ~/.ssh/id_do
+          ssh-keyscan -H "$DO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy compose / Caddyfile / scripts to Droplet
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_do "deploy@${DO_HOST}" "mkdir -p ~/app/scripts"
+          scp -i ~/.ssh/id_do \
+            docker-compose.do.yml Caddyfile .env.example alembic.ini \
+            "deploy@${DO_HOST}:~/app/"
+          scp -i ~/.ssh/id_do -r scripts \
+            "deploy@${DO_HOST}:~/app/"
+
+      - name: Materialise .env on the Droplet
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: deploy
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/app
+            if [ ! -f .env ]; then cp .env.example .env; fi
+
+            cat > .env.managed <<'EOF'
+            ENV=production
+            NARRATIVE_IMAGE=ghcr.io/baher-nader/narrative-ai:latest
+            GHCR_OWNER=baher-nader
+            IMAGE_TAG=latest
+            NARRATIVE_HOSTNAME=${{ secrets.NARRATIVE_HOSTNAME }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            COHERE_API_KEY=${{ secrets.COHERE_API_KEY }}
+            KAGGLE_OCR_URL=${{ secrets.KAGGLE_OCR_URL }}
+            LIVEKIT_URL=${{ secrets.LIVEKIT_URL }}
+            LIVEKIT_API_KEY=${{ secrets.LIVEKIT_API_KEY }}
+            LIVEKIT_API_SECRET=${{ secrets.LIVEKIT_API_SECRET }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
+            EOF
+
+            python3 - <<'PY'
+            from pathlib import Path
+            begin = "# --- BEGIN MANAGED DEPLOY BLOCK ---"
+            end = "# --- END MANAGED DEPLOY BLOCK ---"
+            env_path = Path(".env")
+            managed_path = Path(".env.managed")
+            env_text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+            managed_text = managed_path.read_text(encoding="utf-8").strip()
+            block = f"{begin}\n{managed_text}\n{end}\n"
+
+            if begin in env_text and end in env_text:
+                start = env_text.index(begin)
+                end_pos = env_text.index(end, start) + len(end)
+                replacement_target = env_text[start:end_pos]
+                env_text = env_text.replace(replacement_target, block.strip())
+                env_text = env_text.rstrip() + "\n"
+            else:
+                env_text = (env_text.rstrip() + "\n\n" + block).lstrip("\n")
+            env_path.write_text(env_text, encoding="utf-8")
+            managed_path.unlink(missing_ok=True)
+            PY
+
+            chmod 600 .env
+
+      - name: Build on droplet, run migrations, restart stack
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: deploy
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/app
+            git fetch origin
+            git checkout ${{ env.DEPLOY_BRANCH }}
+            git reset --hard origin/${{ env.DEPLOY_BRANCH }}
+            docker build -f docker/Dockerfile -t ghcr.io/baher-nader/narrative-ai:latest .
+            set -a && . ./.env && set +a
+            python3 scripts/validate_env.py --env production
+            docker compose -f docker-compose.do.yml run --rm narrative-api alembic upgrade head
+            docker compose -f docker-compose.do.yml up -d --remove-orphans
+            docker image prune -af
+            docker builder prune -af
+
+      - name: Wait for /health (max 3 min)
+        env:
+          NARRATIVE_HOSTNAME: ${{ secrets.NARRATIVE_HOSTNAME }}
+        run: |
+          set -e
+          echo "Polling https://${NARRATIVE_HOSTNAME}/health ..."
+          for i in {1..36}; do
+            if curl -fsS "https://${NARRATIVE_HOSTNAME}/health" | grep -qi '"status"'; then
+              echo "Health OK"
+              exit 0
+            fi
+            echo "  not ready (attempt $i/36)"; sleep 5
+          done
+          echo "Health check did not pass; collecting logs..."
+          ssh -i ~/.ssh/id_do "deploy@${{ secrets.DO_HOST }}" \
+            "cd ~/app && docker compose -f docker-compose.do.yml logs --tail=200 narrative-api caddy" || true
+          exit 1

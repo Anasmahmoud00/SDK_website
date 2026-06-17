@@ -1,0 +1,310 @@
+# Run CI on mobile_app_integration and main/master branches
+name: Test Suite
+
+on:
+  push:
+    branches: [main, master, mobile_app_integration, deployment_last_version, ci-test]
+  pull_request:
+    branches: [main, master, mobile_app_integration, deployment_last_version, ci-test]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  security_scan:
+    name: Security Scan (SAST & Dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install security tools
+        run: pip install bandit safety
+
+      - name: Bandit (SAST)
+        run: bandit -r narrative_ai/ -ll -ii
+
+      - name: Safety (Dependency Check)
+        run: safety check -r requirements.txt --full-report || echo "Warnings found in dependencies"
+  backend_lint:
+    name: Backend lint & types (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install lint/type dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "ruff==0.14.14" "mypy>=1.7.0"
+
+      - name: Ruff (lint)
+        run: python -m ruff check narrative_ai/ tests/ --output-format=github
+
+      - name: Ruff (format)
+        run: python -m ruff format --check narrative_ai/ tests/
+
+      - name: Mypy (type check)
+        run: mypy narrative_ai/ tests/ --no-error-summary
+
+  backend_test:
+    name: "Tests · Node ${{ matrix.node }} — ${{ matrix.label }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend_lint, security_scan]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Node 1: Security + OCR ──────────────────────────────────────
+          - node: 1
+            label: "Security & OCR"
+            test_paths: "tests/security/ tests/unit/test_engines/ocr/"
+            cov_fail_under: 10
+
+          # ── Node 2: STT + TTS ───────────────────────────────────────────
+          - node: 2
+            label: "STT & TTS"
+            test_paths: "tests/unit/test_engines/stt/ tests/unit/test_engines/tts/"
+            cov_fail_under: 25
+
+          # ── Node 3: Core Engines + Voice Mode ───────────────────────────
+          - node: 3
+            label: "Core Engines & Voice"
+            test_paths: >-
+              tests/unit/test_engines/voice_mode/
+              tests/unit/test_engines/test_arabic_text_splitter.py
+              tests/unit/test_engines/test_audio_processor.py
+              tests/unit/test_engines/test_image_processor.py
+              tests/unit/test_engines/test_ingestion_error_handling.py
+              tests/unit/test_engines/test_input_handler.py
+              tests/unit/test_engines/test_input_processor.py
+              tests/unit/test_engines/test_ocr_processor.py
+              tests/unit/test_engines/test_provider_initialization.py
+              tests/unit/test_engines/test_rag_engine.py
+              tests/unit/test_engines/test_stt_processor.py
+              tests/unit/test_engines/llm/
+            cov_fail_under: 10
+
+          # ── Node 4: API + Application + Integration ──────────────────────
+          - node: 4
+            label: "API, App & Integration"
+            test_paths: >-
+              tests/unit/test_api/
+              tests/unit/test_application/
+              tests/integration/
+            cov_fail_under: 25
+
+          # ── Node 5: End-to-end (real Postgres + Redis, full FastAPI app)
+          - node: 5
+            label: "E2E"
+            test_paths: "tests/e2e/"
+            cov_fail_under: 0
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: narrative
+          POSTGRES_PASSWORD: narrative_test_password
+          POSTGRES_DB: narrative_ai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U narrative -d narrative_ai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 2048
+          temp-reserve-mb: 1024
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extra Space Cleanup
+        run: |
+          echo "Before extra cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          echo "After extra cleanup:"
+          df -h
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install PyTorch (CPU Only)
+        run: |
+          python -m pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: |
+          mkdir -p ci_tmp
+          export TMPDIR=$(pwd)/ci_tmp
+          export PIP_CACHE_DIR=$(pwd)/.pip_cache
+
+          python -m pip install --upgrade pip setuptools wheel
+          df -h
+
+          grep -vEi "torch|torchvision|torchaudio" requirements.txt > requirements_ci.txt
+          pip install --no-cache-dir -r requirements_ci.txt
+          pip install -e .
+
+          df -h
+
+      - name: Run Alembic migrations
+        run: python -m alembic upgrade head
+        env:
+          DATABASE_URL: postgresql://narrative:narrative_test_password@localhost:5432/narrative_ai_test
+
+      - name: "Run tests — Node ${{ matrix.node }}: ${{ matrix.label }}"
+        run: |
+          # E2E node should not fail the full pipeline when pytest finds no
+          # runnable tests (exit code 5). Treat that as a skip.
+          if [ "${{ matrix.label }}" = "E2E" ]; then
+            set +e
+            pytest ${{ matrix.test_paths }} -v --tb=short \
+              --cov=narrative_ai --cov-branch \
+              --cov-fail-under=${{ matrix.cov_fail_under }} \
+              --cov-report=term-missing \
+              --cov-report=xml:coverage-node-${{ matrix.node }}.xml
+            rc=$?
+            set -e
+            if [ "$rc" -eq 5 ]; then
+              echo "No runnable E2E tests were collected; marking E2E node as skipped."
+              exit 0
+            fi
+            exit "$rc"
+          fi
+          pytest ${{ matrix.test_paths }} -v --tb=short \
+            --cov=narrative_ai --cov-branch \
+            --cov-fail-under=${{ matrix.cov_fail_under }} \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-node-${{ matrix.node }}.xml
+        env:
+          ENV: test
+          DATABASE_URL: postgresql+asyncpg://narrative:narrative_test_password@localhost:5432/narrative_ai_test
+          REDIS_URL: redis://localhost:6379/1
+          TEST_DATABASE_URL: postgresql://narrative:narrative_test_password@localhost:5432/narrative_ai_test
+          TEST_REDIS_URL: redis://localhost:6379/1
+          JWT_SECRET_KEY: test-secret-key-for-ci
+          AUDIT_REQUIRE_TRIGGERS: "false"
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-node-${{ matrix.node }}
+          path: coverage-node-${{ matrix.node }}.xml
+          if-no-files-found: ignore
+
+
+  mobile_app:
+    name: Mobile app (TypeScript checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Mobile app checks are independent of backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile_app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile_app
+        run: |
+          # Use --legacy-peer-deps to handle React peer dependency conflicts
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: TypeScript (no emit)
+        working-directory: mobile_app
+        run: npx tsc -p tsconfig.json --noEmit
+
+  required_checks_gate:
+    name: Required Checks Gate
+    runs-on: ubuntu-latest
+    needs:
+      - security_scan
+      - backend_lint
+      - backend_test
+      - mobile_app
+    if: always()
+    steps:
+      - name: Enforce required checks success
+        run: |
+          set -e
+          if [ "${{ needs.security_scan.result }}" != "success" ] || \
+             [ "${{ needs.backend_lint.result }}" != "success" ] || \
+             [ "${{ needs.backend_test.result }}" != "success" ] || \
+             [ "${{ needs.mobile_app.result }}" != "success" ]; then
+            echo "One or more required checks failed."
+            echo "security_scan=${{ needs.security_scan.result }}"
+            echo "backend_lint=${{ needs.backend_lint.result }}"
+            echo "backend_test=${{ needs.backend_test.result }}"
+            echo "mobile_app=${{ needs.mobile_app.result }}"
+            exit 1
+          fi
+          echo "All required checks passed."

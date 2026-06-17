@@ -1,0 +1,137 @@
+# =============================================================================
+# SECRETS - NEVER commit these
+# =============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+credentials/
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# =============================================================================
+# Virtual environments
+# =============================================================================
+venv/
+ENV/
+env/
+.venv/
+ocr_310_env/
+venv_ocr/
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# Testing / Coverage
+# =============================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+.tox/
+.nox/
+
+# =============================================================================
+# OS
+# =============================================================================
+.DS_Store
+Thumbs.db
+
+# =============================================================================
+# Project-specific
+# =============================================================================
+*.log
+*.tmp
+*.temp
+parallelism_log.txt
+
+# RAG / Input processing outputs
+*.pdf
+test_outputs/
+test_output.txt
+output/
+figures/
+
+# Whisper and other ML models (large files, exceed GitHub 100MB limit)
+# Only ignore top-level "models" dir (e.g. downloaded weights), not framework/infrastructure/database/models/
+/models/
+*.safetensors
+*.bin
+
+# OCR engine (dynamic data / weights)
+weights/
+logs/
+
+# Test/output audio files (generated locally)
+*.opus
+*.wav
+tts_output.mp3
+greeting.mp3
+
+# Terraform (state contains secrets, plan can contain sensitive data)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.zip
+
+# Mobile app (React Native / Expo)
+node_modules/
+.expo/
+android/
+ios/
+*.jks
+*.p8
+*.p12
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Cursor IDE (project-specific)
+.cursor/
+
+# Temporary / Debug Files
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.pdf
+/*.docx
+/*.pptx
+debug_*.py
+reproduce_issue.py
+verify_*.py
+test_*.log
+/*.md
+!/README.md
