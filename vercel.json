@@ -1,0 +1,8 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/docs-portal", "destination": "/index.html" },
+    { "source": "/health", "destination": "/health.json" },
+    { "source": "/", "destination": "/index.html" }
+  ]
+}
